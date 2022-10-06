@@ -14,7 +14,6 @@ if __name__ == "__main__":
     camera = cv2.VideoCapture(0)
     foreground = cv2.imread(join(IMG_PATH, "fg_1.png"))
     faceCascade = cv2.CascadeClassifier(CASC_PATH)
-    val = 3
     while True:
         ret, frame = camera.read()
         #frame = cv2.resize(frame, (frame.shape[1]*2, frame.shape[0]*2))    # scale x2
