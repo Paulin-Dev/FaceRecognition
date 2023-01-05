@@ -1,10 +1,14 @@
 
+# Built-in imports
 from os.path import abspath, join, dirname
+from random import randint
+from time import perf_counter
 
+# 3rd party imports
 import cv2
 from screeninfo import get_monitors
 
-
+# constants
 DIR_PATH      = dirname(abspath(__file__))
 IMG_PATH      = join(DIR_PATH, 'images')
 MODELS_PATH   = join(DIR_PATH, 'models', 'haarcascades')
@@ -12,68 +16,105 @@ MODELS_PATH   = join(DIR_PATH, 'models', 'haarcascades')
 SCREEN_HEIGHT = get_monitors()[0].height
 SCREEN_WIDTH  = get_monitors()[0].width
 
+FACES_NEEDED  = 1 
+
 
 class Camera:
-    def __init__(self) -> None:
+    def __init__(self, title: str) -> None:
         try:
-            self.camera = cv2.VideoCapture(0)
+            self.__camera = cv2.VideoCapture(0)
         except KeyboardInterrupt:
             exit(1)
 
-        self.title = 'Love Calculator'
+        self.__title = title
 
-        self.frontalCascade = cv2.CascadeClassifier(join(MODELS_PATH, 'haarcascade_frontalface_default.xml'))
-        self.profileCascade = cv2.CascadeClassifier(join(MODELS_PATH, 'haarcascade_profileface.xml'))
+        self.__frontalCascade = cv2.CascadeClassifier(join(MODELS_PATH, 'haarcascade_frontalface_default.xml'))
+        self.__profileCascade = cv2.CascadeClassifier(join(MODELS_PATH, 'haarcascade_profileface.xml'))
         
-        cv2.namedWindow(self.title, cv2.WND_PROP_FULLSCREEN)
-        cv2.setWindowProperty(self.title, cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
+        cv2.namedWindow(self.__title, cv2.WND_PROP_FULLSCREEN)
+        cv2.setWindowProperty(self.__title, cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
         
+        self.__countdown      = 0
+        self.__step           = 0
+        self.__love           = 0
+
+    def __draw_value(self, faces, frame) -> None:
+        if self.__countdown == 0:
+            self.__countdown = perf_counter()
+
+        elif perf_counter()-self.__countdown >= 1:
+            self.__countdown = 0
+
+            self.__step += 1
+            if self.__step == 4:
+                self.__love = randint(50, 100)
+
+        if len(faces) == FACES_NEEDED:
+            if 1 <= self.__step <= 3:
+                cv2.putText(frame, f'{randint(0, 100)}%', (30, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 0), 2, cv2.LINE_AA)
+            elif self.__step > 10:
+                self.__step = 0
+
+        elif len(faces) < FACES_NEEDED and 1 <= self.__step <= 3:
+            self.__step = 0
+
+        if 4 <= self.__step <= 9:
+            cv2.putText(frame, f'{self.__love}%', (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 0), 2, cv2.LINE_AA)
+
+    def __draw_rectangles(self, faces, frame) -> None:
+        for index, (x, y, width, height) in enumerate(faces):
+            if index < 2:
+                # /!\ BGR color
+                cv2.rectangle(frame, (x, y), (x+width, y+height), (71, 46, 231), 2)    
+
+    def __resize_frame(self, frame):
+        # Resize to fit the screen's height
+        frame = cv2.resize(frame, (round(frame.shape[0]*(SCREEN_WIDTH/frame.shape[1])), SCREEN_HEIGHT))
+
+        # Add left n right black borders (img, topBorderWidth, bottomBorderWidth, leftBorderWidth, rightBorderWidth, borderStyle, color)
+        x_margin = (SCREEN_WIDTH - frame.shape[1])//2
+        return cv2.copyMakeBorder(frame, 0, 0, x_margin, x_margin, cv2.BORDER_CONSTANT, value=(0, 0, 0))
+
     def detect_faces(self) -> None:
         while True:
             try:
-                ret, frame = self.camera.read()
+                ret, frame = self.__camera.read()
                 grayscale = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-                
-                # minSize could be modified according to the frame's size    minSize=(70, 70)    minNeighbors=20
-                faces = self.frontalCascade.detectMultiScale(
+
+                # minSize could be modified according to the frame's size              minSize=(70, 70)
+                faces = self.__frontalCascade.detectMultiScale(
                     grayscale,
-                    scaleFactor=1.1,
+                    scaleFactor=1.04,
                     minNeighbors=40,
                     flags = cv2.CASCADE_SCALE_IMAGE
                 )
 
                 if isinstance(faces, tuple):
-                    faces = self.profileCascade.detectMultiScale(
+                    faces = self.__profileCascade.detectMultiScale(
                         grayscale,
                         scaleFactor=1.1,
-                        minNeighbors=40,
+                        minNeighbors=15,
                         flags = cv2.CASCADE_SCALE_IMAGE
                     )
-                
-                # Draw rectangles 
-                for (x, y, width, height) in faces:
-                    cv2.rectangle(frame, (x, y), (x+width, y+height), (71, 46, 231), 2)     # BGR color
-                    
-                # Resize to fit the screen's height
-                frame = cv2.resize(frame, (round(frame.shape[0]*(SCREEN_WIDTH/frame.shape[1])), SCREEN_HEIGHT))
-                
-                # Add borders (img, topBorderWidth, bottomBorderWidth, leftBorderWidth, rightBorderWidth, borderStyle, color)
-                x_margin = (SCREEN_WIDTH - frame.shape[1])//2
-                frame = cv2.copyMakeBorder(frame, 0, 0, x_margin, x_margin, cv2.BORDER_CONSTANT, value=(71, 46, 231))
-                
-                cv2.imshow(self.title, frame)
-                
-                # check if escape key or close button is pressed 
-                if cv2.waitKey(1) & 0xFF == 27 or cv2.getWindowProperty(self.title, cv2.WND_PROP_VISIBLE) < 1:
-                    self.camera.release()
+
+                self.__draw_value(faces, frame)
+                self.__draw_rectangles(faces, frame)
+                frame = self.__resize_frame(frame)
+
+                cv2.imshow(self.__title, frame)
+
+                # Check if escape key or close button is pressed 
+                if cv2.waitKey(1) & 0xFF == 27 or cv2.getWindowProperty(self.__title, cv2.WND_PROP_VISIBLE) < 1:
+                    self.__camera.release()
                     cv2.destroyAllWindows()
                     break
+
             except KeyboardInterrupt:
                 break
 
 
 if __name__ == "__main__":
-    camera = Camera()
+    camera = Camera('Love Calculator')
     camera.detect_faces()
 
 
@@ -84,52 +125,16 @@ if __name__ == "__main__":
 
 
 
-
-
-
-
-
-
-
 '''
+Adds a foreground
+=================
 
-def main():
+foreground = cv2.imread(join(IMG_PATH, "fg_1.png"))
 
-    camera = cv2.VideoCapture(0)
-    foreground = cv2.imread(join(IMG_PATH, "fg_1.png"))
-    faceCascade = cv2.CascadeClassifier(CASC_PATH)
-    while True:
-        ret, frame = camera.read()
-        #frame = cv2.resize(frame, (frame.shape[1]*2, frame.shape[0]*2))    # scale x2
-        grayscale = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-
-        # minSize could be modified according to the frame's size
-        faces = faceCascade.detectMultiScale(
-            grayscale,
-            scaleFactor=1.1,
-            minNeighbors=20,
-            minSize=(70, 70),
-            flags = cv2.CASCADE_SCALE_IMAGE
-        )
-        
-        # Draw rectangles on faces
-        for (x, y, width, height) in faces:
-            cv2.rectangle(frame, (x, y), (x+width, y+height), (71, 46, 231), 2)     # /!\ BGR color
-
-        # prevent to rescale the foreground multiple times
-        try:
-            output = cv2.addWeighted(frame, 1, foreground, 0.5, 0)
-        except:
-            foreground = cv2.resize(foreground, (frame.shape[1], frame.shape[0]))
-            output = cv2.addWeighted(frame, 1, foreground, 0.5, 0)
-
-        image = cv2.imshow("Love Calculator", output)
-
-        # check if escape key is pressed
-        if cv2.waitKey(1) & 0xFF == 27:
-            cv2.destroyAllWindows()
-            break
-
-    camera.release()
-
+# prevent to rescale the foreground multiple times
+try:
+    output = cv2.addWeighted(frame, 1, foreground, 0.5, 0)
+except Exception:
+    foreground = cv2.resize(foreground, (frame.shape[1], frame.shape[0]))
+    output = cv2.addWeighted(frame, 1, foreground, 0.5, 0)
 '''
