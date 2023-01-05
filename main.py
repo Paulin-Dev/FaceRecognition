@@ -38,7 +38,7 @@ class Camera:
         self.__step           = 0
         self.__love           = 0
 
-    def __draw_value(self, faces, frame) -> None:
+    def __draw_values(self, faces, frame) -> None:
         if self.__countdown == 0:
             self.__countdown = perf_counter()
 
@@ -59,7 +59,7 @@ class Camera:
             self.__step = 0
 
         if 4 <= self.__step <= 9:
-            cv2.putText(frame, f'{self.__love}%', (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 0), 2, cv2.LINE_AA)
+            cv2.putText(frame, f'{self.__love}%', (30, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 0), 2, cv2.LINE_AA)
 
     def __draw_rectangles(self, faces, frame) -> None:
         for index, (x, y, width, height) in enumerate(faces):
@@ -97,7 +97,7 @@ class Camera:
                         flags = cv2.CASCADE_SCALE_IMAGE
                     )
 
-                self.__draw_value(faces, frame)
+                self.__draw_values(faces, frame)
                 self.__draw_rectangles(faces, frame)
                 frame = self.__resize_frame(frame)
 
